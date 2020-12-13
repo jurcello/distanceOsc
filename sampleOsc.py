@@ -14,28 +14,35 @@ class DistanceSensor:
         self.last_distance = 0
         self.stop_signal = False
 
+        self.setup_pins()
+
+    def setup_pins(self):
         GPIO.setup(self.gpio_trigger, GPIO.OUT)
         GPIO.setup(self.gpio_echo, GPIO.IN)
 
     def measure(self):
-        GPIO.output(self.gpio_trigger, True)
+        self.send_trigger_pulse()
+        time_elapsed = self.measure_sound_roundtrip_time()
+        self.calculate_distance(time_elapsed)
 
+    def send_trigger_pulse(self):
+        GPIO.output(self.gpio_trigger, True)
         time.sleep(0.00001)
         GPIO.output(self.gpio_trigger, False)
 
+    def measure_sound_roundtrip_time(self):
         start_time = time.time()
         stop_time = time.time()
-
         # save StartTime
         while GPIO.input(self.gpio_echo) == 0:
             start_time = time.time()
-
         # save time of arrival
         while GPIO.input(self.gpio_echo) == 1:
             stop_time = time.time()
-
         time_elapsed = stop_time - start_time
+        return time_elapsed
 
+    def calculate_distance(self, time_elapsed):
         self.last_distance = (time_elapsed * 34300) / 2
 
     def stop_sensing(self):
@@ -59,7 +66,7 @@ if __name__ == "__main__":
 
     client = udp_client.SimpleUDPClient(args.ip, args.port)
 
-    thread = threading.Thread(target=distance_sensor_thread_executor, args=(sensor, ))
+    thread = threading.Thread(target=distance_sensor_thread_executor, args=(sensor,))
     thread.start()
 
     try:
