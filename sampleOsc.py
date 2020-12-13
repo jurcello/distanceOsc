@@ -1,6 +1,6 @@
 import argparse
 import time
-import threading
+import concurrent.futures
 import RPi.GPIO as GPIO
 from pythonosc import udp_client
 
@@ -12,7 +12,6 @@ class DistanceSensor:
         self.gpio_trigger = gpio_trigger
         self.gpio_echo = gpio_echo
         self.last_distance = 0
-        self.stop_signal = False
 
         self.setup_pins()
 
@@ -45,8 +44,13 @@ class DistanceSensor:
     def calculate_distance(self, time_elapsed):
         self.last_distance = (time_elapsed * 34300) / 2
 
-    def stop_sensing(self):
-        self.stop_signal = True
+
+class SensorDefinition:
+
+    def __init__(self, sensor, address) -> None:
+        self.sensor = sensor
+        self.address = address
+
 
 class ThreadSignaler:
 
@@ -58,9 +62,9 @@ class ThreadSignaler:
 
 
 sensor = DistanceSensor(gpio_trigger=18, gpio_echo=24)
+sensors = [SensorDefinition(sensor=sensor, address='/sensor1')]
 
-
-def distance_sensor_thread_executor(distance_sensor: DistanceSensor, signaler: ThreadSignaler):
+def distance_sensor_thread_runner(distance_sensor: DistanceSensor, signaler: ThreadSignaler):
     while signaler.allow_running:
         distance_sensor.measure()
         time.sleep(0.02)
@@ -76,16 +80,18 @@ if __name__ == "__main__":
 
     client = udp_client.SimpleUDPClient(args.ip, args.port)
 
-    thread = threading.Thread(target=distance_sensor_thread_executor, args=(sensor, signaler,))
-    thread.start()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sensors)) as executor:
+        for definition in sensors:
+            executor.submit(distance_sensor_thread_runner, definition.sensor, signaler)
 
-    try:
-        while True:
-            client.send_message("/hello_world", sensor.last_distance)
-            time.sleep(0.02)
+        try:
+            while True:
+                for definition in sensors:
+                    client.send_message(definition.address, definition.sensor.last_distance)
+                    time.sleep(0.02)
 
-    except KeyboardInterrupt:
-        signaler.stop()
-        thread.join()
-        print("Stopped by user")
-        GPIO.cleanup()
+        except KeyboardInterrupt:
+            signaler.stop()
+            print("Stopped by user")
+            GPIO.cleanup()
+
