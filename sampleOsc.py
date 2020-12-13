@@ -48,12 +48,20 @@ class DistanceSensor:
     def stop_sensing(self):
         self.stop_signal = True
 
+class ThreadSignaler:
+
+    def __init__(self) -> None:
+        self.allow_running = True
+
+    def stop(self):
+        self.allow_running = False
+
 
 sensor = DistanceSensor(gpio_trigger=18, gpio_echo=24)
 
 
-def distance_sensor_thread_executor(distance_sensor: DistanceSensor):
-    while not distance_sensor.stop_signal:
+def distance_sensor_thread_executor(distance_sensor: DistanceSensor, signaler: ThreadSignaler):
+    while signaler.allow_running:
         distance_sensor.measure()
         time.sleep(0.02)
 
@@ -64,9 +72,11 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=5005, help="The port the OSC server is listening on")
     args = parser.parse_args()
 
+    signaler = ThreadSignaler()
+
     client = udp_client.SimpleUDPClient(args.ip, args.port)
 
-    thread = threading.Thread(target=distance_sensor_thread_executor, args=(sensor,))
+    thread = threading.Thread(target=distance_sensor_thread_executor, args=(sensor, signaler,))
     thread.start()
 
     try:
@@ -75,6 +85,7 @@ if __name__ == "__main__":
             time.sleep(0.02)
 
     except KeyboardInterrupt:
-        sensor.stop_sensing()
+        signaler.stop()
+        thread.join()
         print("Stopped by user")
         GPIO.cleanup()
