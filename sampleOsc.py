@@ -1,15 +1,19 @@
 import argparse
 import time
+import threading
 import RPi.GPIO as GPIO
 from pythonosc import udp_client
 
 GPIO.setmode(GPIO.BCM)
+
 
 class DistanceSensor:
     def __init__(self, gpio_trigger, gpio_echo):
         self.gpio_trigger = gpio_trigger
         self.gpio_echo = gpio_echo
         self.last_distance = 0
+        self.stop_signal = False
+
         GPIO.setup(self.gpio_trigger, GPIO.OUT)
         GPIO.setup(self.gpio_echo, GPIO.IN)
 
@@ -34,8 +38,17 @@ class DistanceSensor:
 
         self.last_distance = (time_elapsed * 34300) / 2
 
+    def stop_sensing(self):
+        self.stop_signal = True
+
 
 sensor = DistanceSensor(gpio_trigger=18, gpio_echo=24)
+
+
+def distance_sensor_thread_executor(distance_sensor: DistanceSensor):
+    while not distance_sensor.stop_signal:
+        distance_sensor.measure()
+        time.sleep(0.02)
 
 
 if __name__ == "__main__":
@@ -46,12 +59,15 @@ if __name__ == "__main__":
 
     client = udp_client.SimpleUDPClient(args.ip, args.port)
 
+    thread = threading.Thread(target=distance_sensor_thread_executor, args=(sensor, ))
+    thread.start()
+
     try:
         while True:
-            sensor.measure()
             client.send_message("/hello_world", sensor.last_distance)
             time.sleep(0.02)
 
     except KeyboardInterrupt:
+        sensor.stop_sensing()
         print("Stopped by user")
         GPIO.cleanup()
