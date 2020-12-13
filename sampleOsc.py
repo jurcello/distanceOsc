@@ -61,8 +61,10 @@ class ThreadSignaler:
         self.allow_running = False
 
 
-sensor = DistanceSensor(gpio_trigger=18, gpio_echo=24)
-sensors = [SensorDefinition(sensor=sensor, address='/sensor1')]
+sensor_definitions = [
+    SensorDefinition(sensor=(DistanceSensor(gpio_trigger=18, gpio_echo=24)), address='/sensor1'),
+    SensorDefinition(sensor=(DistanceSensor(gpio_trigger=17, gpio_echo=27)), address='/sensor2'),
+]
 
 def distance_sensor_thread_runner(distance_sensor: DistanceSensor, signaler: ThreadSignaler):
     while signaler.allow_running:
@@ -80,13 +82,13 @@ if __name__ == "__main__":
 
     client = udp_client.SimpleUDPClient(args.ip, args.port)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sensors)) as executor:
-        for definition in sensors:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(sensor_definitions)) as executor:
+        for definition in sensor_definitions:
             executor.submit(distance_sensor_thread_runner, definition.sensor, signaler)
 
         try:
             while True:
-                for definition in sensors:
+                for definition in sensor_definitions:
                     client.send_message(definition.address, definition.sensor.last_distance)
                     time.sleep(0.02)
 
