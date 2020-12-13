@@ -90,7 +90,7 @@ if __name__ == "__main__":
             while True:
                 for definition in sensor_definitions:
                     client.send_message(definition.address, definition.sensor.last_distance)
-                    time.sleep(0.02)
+                time.sleep(0.02)
 
         except KeyboardInterrupt:
             signaler.stop()
