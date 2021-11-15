@@ -4,7 +4,17 @@ import concurrent.futures
 import RPi.GPIO as GPIO
 from pythonosc import udp_client
 
+import board
+import busio
+
+import adafruit_vl53l0x
+
 GPIO.setmode(GPIO.BCM)
+
+# Initialize I2C bus and sensor.
+i2c = busio.I2C(board.SCL, board.SDA)
+vl53 = adafruit_vl53l0x.VL53L0X(i2c)
+vl53.measurement_timing_budget = 20000
 
 
 class DistanceSensor:
@@ -64,6 +74,7 @@ class ThreadSignaler:
 sensor_definitions = [
     SensorDefinition(sensor=(DistanceSensor(gpio_trigger=18, gpio_echo=24)), address='/sensor1'),
     SensorDefinition(sensor=(DistanceSensor(gpio_trigger=17, gpio_echo=27)), address='/sensor2'),
+    SensorDefinition(sensor=(DistanceSensor(gpio_trigger=12, gpio_echo=6)), address='/sensor3'),
 ]
 
 def distance_sensor_thread_runner(distance_sensor: DistanceSensor, signaler: ThreadSignaler):
@@ -74,7 +85,7 @@ def distance_sensor_thread_runner(distance_sensor: DistanceSensor, signaler: Thr
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--ip", default="192.168.1.6", help="The ip of the OSC server")
+    parser.add_argument("--ip", default="255.255.255.250", help="The ip of the OSC server")
     parser.add_argument("--port", type=int, default=5005, help="The port the OSC server is listening on")
     args = parser.parse_args()
 
@@ -90,6 +101,7 @@ if __name__ == "__main__":
             while True:
                 for definition in sensor_definitions:
                     client.send_message(definition.address, definition.sensor.last_distance)
+                client.send_message('/lightSensor1', vl53.distance)
                 time.sleep(0.02)
 
         except KeyboardInterrupt:
