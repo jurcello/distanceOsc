@@ -2,7 +2,7 @@ import argparse
 import time
 import concurrent.futures
 import RPi.GPIO as GPIO
-from pythonosc import udp_client
+from pythonosc import udp_client, osc_bundle_builder, osc_message_builder
 
 import board
 import busio
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     signaler = ThreadSignaler()
 
-    client = udp_client.SimpleUDPClient(args.ip, args.port)
+    client = udp_client.UDPClient(args.ip, args.port)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(sensor_definitions)) as executor:
         for definition in sensor_definitions:
@@ -106,8 +106,13 @@ if __name__ == "__main__":
 
         try:
             while True:
+                bundle_builder = osc_bundle_builder.OscBundleBuilder(osc_bundle_builder.IMMEDIATELY)
                 for definition in sensor_definitions:
-                    client.send_message(definition.address, definition.sensor.last_distance)
+                    message_builder = osc_message_builder.OscMessageBuilder(definition.address)
+                    message_builder.add_arg(definition.sensor.last_distance)
+                    message = message_builder.build()
+                    bundle_builder.add_content(content=message)
+                client.send(bundle_builder.build())
                 time.sleep(0.05)
 
         except KeyboardInterrupt:
