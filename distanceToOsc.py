@@ -13,11 +13,8 @@ GPIO.setmode(GPIO.BCM)
 
 # Initialize I2C bus and sensor.
 i2c = busio.I2C(board.SCL, board.SDA)
-vl53 = adafruit_vl53l0x.VL53L0X(i2c)
-vl53.measurement_timing_budget = 20000
 
-
-class DistanceSensor:
+class DistanceSensorUltraSonic:
     def __init__(self, gpio_trigger, gpio_echo):
         self.gpio_trigger = gpio_trigger
         self.gpio_echo = gpio_echo
@@ -54,6 +51,15 @@ class DistanceSensor:
     def calculate_distance(self, time_elapsed):
         self.last_distance = (time_elapsed * 34300) / 2
 
+class DistanceSensorLight:
+    def __init__(self) -> None:
+        self.vl53 = adafruit_vl53l0x.VL53L0X(i2c)
+
+        self.last_distance = 0
+
+    def measure(self):
+        self.last_distance = self.vl53.distance
+
 
 class SensorDefinition:
 
@@ -72,15 +78,16 @@ class ThreadSignaler:
 
 
 sensor_definitions = [
-    SensorDefinition(sensor=(DistanceSensor(gpio_trigger=18, gpio_echo=24)), address='/sensor1'),
-    SensorDefinition(sensor=(DistanceSensor(gpio_trigger=17, gpio_echo=27)), address='/sensor2'),
-    SensorDefinition(sensor=(DistanceSensor(gpio_trigger=12, gpio_echo=6)), address='/sensor3'),
+    SensorDefinition(sensor=(DistanceSensorUltraSonic(gpio_trigger=18, gpio_echo=24)), address='/sensor1'),
+    SensorDefinition(sensor=(DistanceSensorUltraSonic(gpio_trigger=17, gpio_echo=27)), address='/sensor2'),
+    SensorDefinition(sensor=(DistanceSensorUltraSonic(gpio_trigger=12, gpio_echo=6)), address='/sensor3'),
+    SensorDefinition(sensor=(DistanceSensorLight()), address='/lightSensor1'),
 ]
 
-def distance_sensor_thread_runner(distance_sensor: DistanceSensor, signaler: ThreadSignaler):
+def distance_sensor_thread_runner(distance_sensor: DistanceSensorUltraSonic, signaler: ThreadSignaler):
     while signaler.allow_running:
         distance_sensor.measure()
-        time.sleep(0.02)
+        time.sleep(0.05)
 
 
 if __name__ == "__main__":
@@ -101,8 +108,7 @@ if __name__ == "__main__":
             while True:
                 for definition in sensor_definitions:
                     client.send_message(definition.address, definition.sensor.last_distance)
-                client.send_message('/lightSensor1', vl53.distance)
-                time.sleep(0.02)
+                time.sleep(0.05)
 
         except KeyboardInterrupt:
             signaler.stop()
